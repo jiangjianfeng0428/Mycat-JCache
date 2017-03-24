@@ -54,7 +54,7 @@ public class BinaryFlushCommand implements BinaryCommand{
 		long new_oldest = 0;
 		
 		if(!Settings.flushEnabled){
-			writeResponse(conn,ProtocolBinaryCommand.PROTOCOL_BINARY_CMD_FLUSH.getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_AUTH_ERROR.getStatus(), 0L);
+			BinaryCommand.writeResponse(conn,ProtocolBinaryCommand.PROTOCOL_BINARY_CMD_FLUSH.getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_AUTH_ERROR.getStatus(), 0L);
 			return;
 		}
 		
