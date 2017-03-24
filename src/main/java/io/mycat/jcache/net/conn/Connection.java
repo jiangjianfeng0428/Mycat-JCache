@@ -148,8 +148,11 @@ public class Connection implements Closeable, Runnable {
     	    	   case conn_swallow:
     	    		   break;
     	    	   case conn_write:
+                       readBuffer.limit(readBuffer.position());
+                       readBuffer.position(lastMessagePos);
+                       readBuffer.compact();
     	    		   setLastMessagePos(0);
-    	    		   readBuffer.clear();
+//    	    		   readBuffer.clear();
     	    		   asynWrite();
     	    		   state = CONN_STATES.conn_read;
     	    		   stop = true;

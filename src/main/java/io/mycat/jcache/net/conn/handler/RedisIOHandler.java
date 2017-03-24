@@ -1,43 +1,64 @@
 package io.mycat.jcache.net.conn.handler;
 
 import io.mycat.jcache.net.conn.Connection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.stream.IntStream;
 
 /**
  * redis io handler
  */
 public class RedisIOHandler implements IOHandler {
-    public static final int REDIS_OK = 0, REDIS_ERR = -1;
+    public static Logger logger = LoggerFactory.getLogger(Connection.class);
+
+    public static final int REDIS_OK = 0, REDIS_ERR = -1, REDIS_INLINE_MAX_SIZE = 1024 * 64;
 
     @Override
     public boolean doReadHandler(Connection conn) throws IOException {
-        ByteBuffer readBuffer = conn.getReadDataBuffer();
-        int lastMsgPos = conn.getLastMessagePos();
-        int limit = readBuffer.position();
-        IntStream.range(lastMsgPos, limit).forEach((i)->{
-            if(readBuffer.get(i) == 13){
+        RedisMessage redisMessage = new RedisMessage(conn.getReadDataBuffer(), conn.getLastMessagePos());
 
+        while(redisMessage.position() < redisMessage.limit()) {
+            redisMessage.replay = null;
+            int result = processMultibulkBuffer(redisMessage);
+            conn.getReadDataBuffer().position(redisMessage.position());
+            conn.setLastMessagePos(redisMessage.position());
+
+            if (result == REDIS_OK) {
+                processCommand(redisMessage);
             }
-        });
-        return false;
+
+            if (redisMessage.replay != null) {
+                ByteBuffer writeBuf = ByteBuffer.wrap(redisMessage.replay.getBytes());
+                writeBuf.compact();
+                conn.addWriteQueue(writeBuf);
+                conn.enableWrite(true);
+            }
+        }
+
+        return true;
     }
 
     private int processMultibulkBuffer(RedisMessage redisMessage){
         String message = redisMessage.message();
+        logger.debug(message);
+
         if(message.charAt(0) != '*'){
             discardCurrentCmd(redisMessage, message);
+            addErrReplay(redisMessage, "Protocol error: expected '*', got '" + message.charAt(0) + "'");
             return REDIS_ERR;
         }
 
         int lineEndPos = message.indexOf("\r\n");
         if(lineEndPos < 0) return REDIS_ERR;
 
-        int multibulkLen = 0;
+        int multibulkLen;
         try{
             multibulkLen = Integer.parseInt(message.substring(1, lineEndPos));
+            lineEndPos++;
         }catch (NumberFormatException e){
             discardCurrentCmd(redisMessage, message);
             return REDIS_ERR;
@@ -53,14 +74,51 @@ public class RedisIOHandler implements IOHandler {
 
         String[] cmdParams = new String[multibulkLen];
         while(multibulkLen > 0){
-            if(message.charAt(lineEndPos + 1) != '$'){
+            int index = lineEndPos;
+            lineEndPos = message.indexOf("\r\n", index);
+            if(lineEndPos < 0) return REDIS_ERR;
+            if(lineEndPos - index > REDIS_INLINE_MAX_SIZE){
                 discardCurrentCmd(redisMessage, message);
+                addErrReplay(redisMessage, "Protocol error: too big bulk count string");
                 return REDIS_ERR;
             }
-            lineEndPos = message.indexOf("\r\n");
 
+            index++;
+            if(message.charAt(index) != '$'){
+                discardCurrentCmd(redisMessage, message);
+                addErrReplay(redisMessage, "Protocol error: expected '$', got '" + message.charAt(index) + "'");
+                return REDIS_ERR;
+            }
+            index++;
+
+            int bulkLen = 0;
+            try{
+                bulkLen = Integer.parseInt(message.substring(index, lineEndPos));
+                lineEndPos++;
+            }catch (NumberFormatException e){
+                discardCurrentCmd(redisMessage, message);
+                addErrReplay(redisMessage, "Protocol error: invalid bulk length");
+                return REDIS_ERR;
+            }
+
+            if(bulkLen < 0 || bulkLen > 512*1024*1024){
+                discardCurrentCmd(redisMessage, message);
+                addErrReplay(redisMessage, "Protocol error: invalid bulk length");
+                return REDIS_ERR;
+            }
+
+            index = lineEndPos + 1;
+            lineEndPos = message.indexOf("\r\n", index);
+            if(lineEndPos < 0) return REDIS_ERR;
+
+            cmdParams[cmdParams.length - multibulkLen] = message.substring(index, lineEndPos);
+            lineEndPos++;
+            multibulkLen--;
         }
-        return REDIS_ERR;
+
+        redisMessage.position(lineEndPos);
+        redisMessage.cmdParams(cmdParams);
+        return REDIS_OK;
     }
 
     /**
@@ -81,18 +139,28 @@ public class RedisIOHandler implements IOHandler {
     }
 
     private void addErrReplay(RedisMessage redisMessage, String replay){
-        redisMessage.replay("-ERR" + replay + "\r\n");
+        redisMessage.replay("-ERR " + replay + "\r\n");
     }
 
-    private class RedisMessage{
+    private void addOkReplay(RedisMessage redisMessage){
+        redisMessage.replay("+OK\r\n");
+    }
+
+    private void processCommand(RedisMessage redisMessage){
+        logger.debug(Arrays.toString(redisMessage.cmdParams()));
+        addOkReplay(redisMessage);
+    }
+
+    class RedisMessage{
         private final ByteBuffer connReadBuf;
         private int position, limit;
         private String replay;
+        private String[] cmdParams;
 
-        public RedisMessage(ByteBuffer connReadBuf, int position, int limit) {
+        public RedisMessage(ByteBuffer connReadBuf, int position) {
             this.connReadBuf = connReadBuf;
             this.position = position;
-            this.limit = limit;
+            this.limit = this.connReadBuf.position();
         }
 
         public String message(){
@@ -113,6 +181,14 @@ public class RedisIOHandler implements IOHandler {
 
         public void replay(String replay){
             this.replay = replay;
+        }
+
+        public void cmdParams(String[] cmdParams){
+            this.cmdParams = cmdParams;
+        }
+
+        public String[] cmdParams(){
+            return this.cmdParams;
         }
     }
 }
