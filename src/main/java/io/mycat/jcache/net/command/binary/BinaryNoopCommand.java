@@ -58,7 +58,7 @@ public class BinaryNoopCommand implements BinaryCommand{
 			BinaryResponseHeader header = buildHeader(conn.getBinaryRequestHeader(),ProtocolBinaryCommand.PROTOCOL_BINARY_CMD_NOOP.getByte(),null,null,null,0l);
 			writeResponse(conn,header,null,null,null);
 		} else {
-			writeResponse(conn,ProtocolBinaryCommand.PROTOCOL_BINARY_CMD_NOOP.getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
+			BinaryCommand.writeResponse(conn,ProtocolBinaryCommand.PROTOCOL_BINARY_CMD_NOOP.getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
 		}
 	}
 }

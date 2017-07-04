@@ -40,10 +40,10 @@ public class BinaryQuitCommand implements BinaryCommand{
 		
 		if (keylen == 0 && extlen == 0 && bodylen == 0) {
 			logger.info("execute command quit ");
-			writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_SUCCESS.getStatus(), 0L);
+			BinaryCommand.writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_SUCCESS.getStatus(), 0L);
 			conn.setWrite_and_go(CONN_STATES.conn_closing);
 		} else {
-			writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
+			BinaryCommand.writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
 		}
 	}
 }

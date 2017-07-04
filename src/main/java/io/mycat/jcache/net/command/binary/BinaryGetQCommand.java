@@ -43,7 +43,7 @@ public class BinaryGetQCommand implements BinaryCommand{
 		if (extlen == 0 && bodylen == keylen && keylen > 0) {
 			process_bin_get_or_touch(conn);
 		} else {
-			writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
+			BinaryCommand.writeResponse(conn, conn.getCurCommand().getByte(), ProtocolResponseStatus.PROTOCOL_BINARY_RESPONSE_EINVAL.getStatus(), 0L);
 		}
 	}
 }

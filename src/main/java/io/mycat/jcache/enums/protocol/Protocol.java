@@ -9,7 +9,7 @@ public enum Protocol {
     binary( 0 ),
     negotiating( 0 ), /* Discovering the protocol */
     ascii( 3 ), /* arbitrary value. */
-	resp(4);/* redis protocol */
+	resp(4);
 	
 	private int value = 0;
 

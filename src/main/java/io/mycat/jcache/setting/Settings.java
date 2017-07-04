@@ -47,7 +47,7 @@ public class Settings {
 	public static boolean detailEnabled = false;
 	public static int reqsPerEvent = 20;
 	public static int backLog = 1024;
-	public static Protocol binding_protocol = Protocol.negotiating;
+	public static Protocol binding_protocol = Protocol.resp;
 	public static int itemSizeMax = 1024*1024; /* The famous 1MB upper limit. */
 	public static int slabPageSize = 1024 * 1024; /* chunks are split from 1MB pages. */
 	public static int slabChunkSizeMax = slabPageSize;
